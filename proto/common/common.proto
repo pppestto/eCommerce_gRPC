@@ -3,7 +3,7 @@ syntax = "proto3";
 
 package common;
  
-option go_package = "./common;common";
+option go_package = "github.com/pppestto/ecommerce-grpc/pb/common";  // общий пакет для всех общих типов
 
 // import "google/protobuf/timestamp.proto";  // для дат
 
