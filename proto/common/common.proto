@@ -1,0 +1,18 @@
+// proto/common/common.proto
+syntax = "proto3";
+
+package common;
+ 
+option go_package = "./common;common";
+
+// import "google/protobuf/timestamp.proto";  // для дат
+
+message Money {
+  int64  amount   = 1;  // в копейках/центах, чтобы избежать float
+  string currency = 2;  // "RUB", "USD"
+}
+
+message Pagination {
+  int32 page = 1;
+  int32 size = 2;
+}

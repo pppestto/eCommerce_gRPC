@@ -1,0 +1,37 @@
+// proto/product/v1/product.proto
+syntax = "proto3";
+
+package product.v1;
+
+option go_package = "./product/v1;productv1";
+
+import "common/common.proto"; // для Pagination и Money
+
+message Product {
+  string id          = 1;
+  string name        = 2;
+  string description = 3;
+  common.Money price = 4;
+  int32  stock       = 5;
+}
+
+message GetProductRequest {
+  string id = 1;
+}
+ 
+message ListProductsRequest {
+  common.Pagination pagination = 1;
+  string category      = 2;  // фильтр
+}
+
+message ListProductsResponse {
+  repeated Product products = 1;
+  int32 total_count = 2;
+}
+
+// Сервис 
+service ProductService {
+  rpc GetProduct(GetProductRequest) returns (Product);
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
+  rpc CreateProduct(Product) returns (Product);  // простота: вход = продукт без ID
+}
