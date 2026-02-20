@@ -10,7 +10,7 @@ package v1
 
 import (
 	common "github.com/pppestto/ecommerce-grpc/pb/common"
-	v1 "github.com/pppestto/ecommerce-grpc/proto/gen/user/v1"
+	v1 "github.com/pppestto/ecommerce-grpc/pb/user/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
