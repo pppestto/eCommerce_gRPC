@@ -3,7 +3,7 @@ syntax = "proto3";
 
 package order.v1;
  
-option go_package = "github.com/pppestto/ecommerce-grpc/proto/gen/order/v1";
+option go_package = "github.com/pppestto/ecommerce-grpc/proto/order/v1";
  
 import "user/v1/user.proto";  // импортируем из другого пакета
 import "common/common.proto"; // если используем Money
