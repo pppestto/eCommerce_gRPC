@@ -3,9 +3,8 @@ syntax = "proto3";
 
 package order.v1;
  
-option go_package = "github.com/pppestto/ecommerce-grpc/proto/order/v1";
+option go_package = "github.com/pppestto/ecommerce-grpc/proto/pb/order/v1";
  
-import "user/v1/user.proto";  // импортируем из другого пакета
 import "common/common.proto"; // если используем Money
 
 enum OrderStatus {
@@ -23,11 +22,11 @@ message OrderItem {
 }
 
 message Order {
-  string               id     = 1;
-  user.v1.User         user   = 2;  // ссылка на User из другого пакета
-  repeated OrderItem   items  = 3;
-  common.Money         total  = 4;
-  OrderStatus          status = 5;
+  string              id      = 1;
+  string              user_id = 2;  // ссылка на User из другого пакета
+  repeated OrderItem  items   = 3;
+  common.Money        total   = 4;
+  OrderStatus         status  = 5;
 }
 
 message CreateOrderRequest {

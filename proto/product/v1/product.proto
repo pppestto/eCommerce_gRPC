@@ -3,7 +3,7 @@ syntax = "proto3";
 
 package product.v1;
 
-option go_package = "github.com/pppestto/ecommerce-grpc/proto/gen/product/v1";
+option go_package = "github.com/pppestto/ecommerce-grpc/proto/pb/product/v1";
 
 import "common/common.proto"; // для Pagination и Money
 
