@@ -1,0 +1,9 @@
+.git
+.gitignore
+.idea
+.vscode
+*.log
+.env
+.env.*
+docker-compose*.yml
+.dockerignore
