@@ -10,7 +10,6 @@ package v1
 
 import (
 	common "github.com/pppestto/ecommerce-grpc/pb/common"
-	v1 "github.com/pppestto/ecommerce-grpc/pb/user/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -143,7 +142,7 @@ func (x *OrderItem) GetPrice() *common.Money {
 type Order struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	User          *v1.User               `protobuf:"bytes,2,opt,name=user,proto3" json:"user,omitempty"` // ссылка на User из другого пакета
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ссылка на User из другого пакета
 	Items         []*OrderItem           `protobuf:"bytes,3,rep,name=items,proto3" json:"items,omitempty"`
 	Total         *common.Money          `protobuf:"bytes,4,opt,name=total,proto3" json:"total,omitempty"`
 	Status        OrderStatus            `protobuf:"varint,5,opt,name=status,proto3,enum=order.v1.OrderStatus" json:"status,omitempty"`
@@ -188,11 +187,11 @@ func (x *Order) GetId() string {
 	return ""
 }
 
-func (x *Order) GetUser() *v1.User {
+func (x *Order) GetUserId() string {
 	if x != nil {
-		return x.User
+		return x.UserId
 	}
-	return nil
+	return ""
 }
 
 func (x *Order) GetItems() []*OrderItem {
@@ -456,15 +455,15 @@ var File_order_v1_order_proto protoreflect.FileDescriptor
 
 const file_order_v1_order_proto_rawDesc = "" +
 	"\n" +
-	"\x14order/v1/order.proto\x12\border.v1\x1a\x12user/v1/user.proto\x1a\x13common/common.proto\"k\n" +
+	"\x14order/v1/order.proto\x12\border.v1\x1a\x13common/common.proto\"k\n" +
 	"\tOrderItem\x12\x1d\n" +
 	"\n" +
 	"product_id\x18\x01 \x01(\tR\tproductId\x12\x1a\n" +
 	"\bquantity\x18\x02 \x01(\x05R\bquantity\x12#\n" +
-	"\x05price\x18\x03 \x01(\v2\r.common.MoneyR\x05price\"\xb9\x01\n" +
+	"\x05price\x18\x03 \x01(\v2\r.common.MoneyR\x05price\"\xaf\x01\n" +
 	"\x05Order\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
-	"\x04user\x18\x02 \x01(\v2\r.user.v1.UserR\x04user\x12)\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
 	"\x05items\x18\x03 \x03(\v2\x13.order.v1.OrderItemR\x05items\x12#\n" +
 	"\x05total\x18\x04 \x01(\v2\r.common.MoneyR\x05total\x12-\n" +
 	"\x06status\x18\x05 \x01(\x0e2\x15.order.v1.OrderStatusR\x06status\"X\n" +
@@ -490,7 +489,7 @@ const file_order_v1_order_proto_rawDesc = "" +
 	"\fOrderService\x12J\n" +
 	"\vCreateOrder\x12\x1c.order.v1.CreateOrderRequest\x1a\x1d.order.v1.CreateOrderResponse\x126\n" +
 	"\bGetOrder\x12\x19.order.v1.GetOrderRequest\x1a\x0f.order.v1.Order\x12H\n" +
-	"\x11UpdateOrderStatus\x12\".order.v1.UpdateOrderStatusRequest\x1a\x0f.order.v1.OrderB7Z5github.com/pppestto/ecommerce-grpc/proto/gen/order/v1b\x06proto3"
+	"\x11UpdateOrderStatus\x12\".order.v1.UpdateOrderStatusRequest\x1a\x0f.order.v1.OrderB6Z4github.com/pppestto/ecommerce-grpc/proto/pb/order/v1b\x06proto3"
 
 var (
 	file_order_v1_order_proto_rawDescOnce sync.Once
@@ -516,29 +515,27 @@ var file_order_v1_order_proto_goTypes = []any{
 	(*UpdateOrderStatusRequest)(nil),  // 6: order.v1.UpdateOrderStatusRequest
 	(*UpdateOrderStatusResponse)(nil), // 7: order.v1.UpdateOrderStatusResponse
 	(*common.Money)(nil),              // 8: common.Money
-	(*v1.User)(nil),                   // 9: user.v1.User
 }
 var file_order_v1_order_proto_depIdxs = []int32{
 	8,  // 0: order.v1.OrderItem.price:type_name -> common.Money
-	9,  // 1: order.v1.Order.user:type_name -> user.v1.User
-	1,  // 2: order.v1.Order.items:type_name -> order.v1.OrderItem
-	8,  // 3: order.v1.Order.total:type_name -> common.Money
-	0,  // 4: order.v1.Order.status:type_name -> order.v1.OrderStatus
-	1,  // 5: order.v1.CreateOrderRequest.items:type_name -> order.v1.OrderItem
-	2,  // 6: order.v1.CreateOrderResponse.order:type_name -> order.v1.Order
-	0,  // 7: order.v1.UpdateOrderStatusRequest.new_status:type_name -> order.v1.OrderStatus
-	2,  // 8: order.v1.UpdateOrderStatusResponse.order:type_name -> order.v1.Order
-	3,  // 9: order.v1.OrderService.CreateOrder:input_type -> order.v1.CreateOrderRequest
-	5,  // 10: order.v1.OrderService.GetOrder:input_type -> order.v1.GetOrderRequest
-	6,  // 11: order.v1.OrderService.UpdateOrderStatus:input_type -> order.v1.UpdateOrderStatusRequest
-	4,  // 12: order.v1.OrderService.CreateOrder:output_type -> order.v1.CreateOrderResponse
-	2,  // 13: order.v1.OrderService.GetOrder:output_type -> order.v1.Order
-	2,  // 14: order.v1.OrderService.UpdateOrderStatus:output_type -> order.v1.Order
-	12, // [12:15] is the sub-list for method output_type
-	9,  // [9:12] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	1,  // 1: order.v1.Order.items:type_name -> order.v1.OrderItem
+	8,  // 2: order.v1.Order.total:type_name -> common.Money
+	0,  // 3: order.v1.Order.status:type_name -> order.v1.OrderStatus
+	1,  // 4: order.v1.CreateOrderRequest.items:type_name -> order.v1.OrderItem
+	2,  // 5: order.v1.CreateOrderResponse.order:type_name -> order.v1.Order
+	0,  // 6: order.v1.UpdateOrderStatusRequest.new_status:type_name -> order.v1.OrderStatus
+	2,  // 7: order.v1.UpdateOrderStatusResponse.order:type_name -> order.v1.Order
+	3,  // 8: order.v1.OrderService.CreateOrder:input_type -> order.v1.CreateOrderRequest
+	5,  // 9: order.v1.OrderService.GetOrder:input_type -> order.v1.GetOrderRequest
+	6,  // 10: order.v1.OrderService.UpdateOrderStatus:input_type -> order.v1.UpdateOrderStatusRequest
+	4,  // 11: order.v1.OrderService.CreateOrder:output_type -> order.v1.CreateOrderResponse
+	2,  // 12: order.v1.OrderService.GetOrder:output_type -> order.v1.Order
+	2,  // 13: order.v1.OrderService.UpdateOrderStatus:output_type -> order.v1.Order
+	11, // [11:14] is the sub-list for method output_type
+	8,  // [8:11] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_order_v1_order_proto_init() }

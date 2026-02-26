@@ -275,7 +275,7 @@ const file_product_v1_product_proto_rawDesc = "" +
 	"\n" +
 	"GetProduct\x12\x1d.product.v1.GetProductRequest\x1a\x13.product.v1.Product\x12Q\n" +
 	"\fListProducts\x12\x1f.product.v1.ListProductsRequest\x1a .product.v1.ListProductsResponse\x129\n" +
-	"\rCreateProduct\x12\x13.product.v1.Product\x1a\x13.product.v1.ProductB9Z7github.com/pppestto/ecommerce-grpc/proto/gen/product/v1b\x06proto3"
+	"\rCreateProduct\x12\x13.product.v1.Product\x1a\x13.product.v1.ProductB8Z6github.com/pppestto/ecommerce-grpc/proto/pb/product/v1b\x06proto3"
 
 var (
 	file_product_v1_product_proto_rawDescOnce sync.Once

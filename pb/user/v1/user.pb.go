@@ -275,7 +275,7 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"\n" +
 	"CreateUser\x12\x1a.user.v1.CreateUserRequest\x1a\x1b.user.v1.CreateUserResponse\x12=\n" +
 	"\n" +
-	"DeleteUser\x12\x17.user.v1.GetUserRequest\x1a\x16.google.protobuf.EmptyB6Z4github.com/pppestto/ecommerce-grpc/proto/gen/user/v1b\x06proto3"
+	"DeleteUser\x12\x17.user.v1.GetUserRequest\x1a\x16.google.protobuf.EmptyB5Z3github.com/pppestto/ecommerce-grpc/proto/pb/user/v1b\x06proto3"
 
 var (
 	file_user_v1_user_proto_rawDescOnce sync.Once
