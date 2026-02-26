@@ -1,0 +1,8 @@
+server:
+  port: 8080
+  host: "0.0.0.0"
+
+grpc:
+  user_service: "127.0.0.1:50051"
+  product_service: "127.0.0.1:50052"
+  order_service: "127.0.0.1:50053"
