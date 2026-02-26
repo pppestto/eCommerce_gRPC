@@ -1,0 +1,19 @@
+server:
+  port: 50051
+  host: "0.0.0.0"
+
+database:
+  driver: postgres
+  dsn: "postgres://postgres:password@localhost:5433/ecommerce"
+  max_connections: 25
+  min_connections: 5
+
+kafka:
+  brokers:
+    - "localhost:9092"
+  topic: "order-events"
+  group_id: "order-service"
+
+logging:
+  level: "info"
+  format: "json"
