@@ -7,43 +7,45 @@ import (
 	"github.com/pppestto/ecommerce-grpc/services/user-service/internal/domain"
 )
 
-// UserUseCase - сервис бизнес логики
 type UserService struct {
-	repo     UserRepository
-	eventBus UserEventBus
+	repo           UserRepository
+	eventBus       UserEventBus
+	passwordHasher PasswordHasher
 }
 
-// NewUserService создаёт новый сервис пользователей
-func NewUserService(repo UserRepository, eventBus UserEventBus) *UserService {
+func NewUserService(repo UserRepository, eventBus UserEventBus, passwordHasher PasswordHasher) *UserService {
 	return &UserService{
-		repo:     repo,
-		eventBus: eventBus,
+		repo:           repo,
+		eventBus:       eventBus,
+		passwordHasher: passwordHasher,
 	}
 }
 
-// CreateUser создаёт нового пользователя
-func (s *UserService) CreateUser(ctx context.Context, email string) (*domain.User, error) {
-	// Валидация и создание (domain logic)
+func (s *UserService) CreateUser(ctx context.Context, email, password string) (*domain.User, error) {
 	user, err := domain.NewUser(email)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user data: %w", err)
 	}
 
-	// Сохраняем в хранилище
+	if password != "" {
+		hash, err := s.passwordHasher.Hash(password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash password: %w", err)
+		}
+		user.PasswordHash = hash
+	}
+
 	if err := s.repo.Save(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
-	// Публикуем событие (асинхронно, не критично если упадёт)
 	if err := s.eventBus.PublishUserCreated(ctx, user); err != nil {
-		// Логируем, но не падаем
 		fmt.Printf("failed to publish user created event: %v\n", err)
 	}
 
 	return user, nil
 }
 
-// GetUser получает пользователя по ID
 func (s *UserService) GetUser(ctx context.Context, id string) (*domain.User, error) {
 	user, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -53,22 +55,35 @@ func (s *UserService) GetUser(ctx context.Context, id string) (*domain.User, err
 	return user, nil
 }
 
-// DeleteUser удаляет пользователя
+func (s *UserService) Login(ctx context.Context, email, password string) (*domain.User, error) {
+	user, err := s.repo.GetByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("invalid email or password")
+	}
+
+	if user.PasswordHash == "" {
+		return nil, fmt.Errorf("invalid email or password")
+	}
+
+	if !s.passwordHasher.Compare(user.PasswordHash, password) {
+		return nil, fmt.Errorf("invalid email or password")
+	}
+
+	user.PasswordHash = ""
+	return user, nil
+}
+
 func (s *UserService) DeleteUser(ctx context.Context, id string) error {
-	// Проверяем, что пользователь существует
 	_, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
 	}
 
-	// Удаляем из хранилища
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	// Публикуем событие
 	if err := s.eventBus.PublishUserDeleted(ctx, id); err != nil {
-		// Логируем, но не падаем
 		fmt.Printf("failed to publish user deleted event: %v\n", err)
 	}
 

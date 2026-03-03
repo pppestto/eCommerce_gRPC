@@ -7,23 +7,23 @@ import (
 )
 
 type User struct {
-	ID    string
-	Email string
+	ID           string
+	Email        string
+	PasswordHash string
 }
 
-// NewUser создаёт нового пользователя с валидацией
 func NewUser(email string) (*User, error) {
 	if err := validateEmail(email); err != nil {
 		return nil, err
 	}
 
 	return &User{
-		ID:    uuid.New().String(),
-		Email: email,
+		ID:           uuid.New().String(),
+		Email:        email,
+		PasswordHash: "",
 	}, nil
 }
 
-// validateEmail проверяет валидность email
 func validateEmail(email string) error {
 	if email == "" {
 		return errors.New("email cannot be empty")
