@@ -8,14 +8,13 @@ import (
 	orderv1 "github.com/pppestto/ecommerce-grpc/pb/order/v1"
 	productv1 "github.com/pppestto/ecommerce-grpc/pb/product/v1"
 	userv1 "github.com/pppestto/ecommerce-grpc/pb/user/v1"
+	"github.com/pppestto/ecommerce-grpc/services/bff/internal/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// CreateOrderRequest — REST модель для создания заказа
 type CreateOrderRequest struct {
-	UserID string              `json:"user_id"`
-	Items  []CreateOrderItem   `json:"items"`
+	Items []CreateOrderItem `json:"items"`
 }
 
 type CreateOrderItem struct {
@@ -35,16 +34,18 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	var req CreateOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	if req.UserID == "" {
-		writeJSONError(w, http.StatusBadRequest, "user_id is required")
-		return
-	}
 	if len(req.Items) == 0 {
 		writeJSONError(w, http.StatusBadRequest, "at least one item is required")
 		return
@@ -52,8 +53,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// 1. Проверяем существование пользователя
-	_, err := h.clients.User.GetUser(ctx, &userv1.GetUserRequest{Id: req.UserID})
+	_, err := h.user.GetUser(ctx, &userv1.GetUserRequest{Id: userID})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			writeJSONError(w, http.StatusBadRequest, "user not found")
@@ -63,13 +63,12 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Проверяем существование каждого продукта
 	for _, item := range req.Items {
 		if item.ProductID == "" || item.Quantity <= 0 || item.Price.Amount < 0 {
 			writeJSONError(w, http.StatusBadRequest, "invalid item")
 			return
 		}
-		_, err := h.clients.Product.GetProduct(ctx, &productv1.GetProductRequest{Id: item.ProductID})
+		_, err := h.product.GetProduct(ctx, &productv1.GetProductRequest{Id: item.ProductID})
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
 				writeJSONError(w, http.StatusBadRequest, "product not found: "+item.ProductID)
@@ -80,7 +79,6 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Конвертируем в gRPC запрос
 	items := make([]*orderv1.OrderItem, len(req.Items))
 	for i, it := range req.Items {
 		items[i] = &orderv1.OrderItem{
@@ -91,11 +89,11 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	grpcReq := &orderv1.CreateOrderRequest{
-		UserId: req.UserID,
+		UserId: userID,
 		Items:  items,
 	}
 
-	resp, err := h.clients.Order.CreateOrder(ctx, grpcReq)
+	resp, err := h.order.CreateOrder(ctx, grpcReq)
 	if err != nil {
 		if status.Code(err) == codes.InvalidArgument {
 			writeJSONError(w, http.StatusBadRequest, status.Convert(err).Message())
