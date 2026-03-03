@@ -18,6 +18,7 @@ func main() {
 		UserAddr:    getEnv("USER_SERVICE_ADDR", "127.0.0.1:50051"),
 		ProductAddr: getEnv("PRODUCT_SERVICE_ADDR", "127.0.0.1:50052"),
 		OrderAddr:   getEnv("ORDER_SERVICE_ADDR", "127.0.0.1:50053"),
+		RedisAddr:   getEnv("REDIS_ADDR", "127.0.0.1:6379"),
 	}
 
 	application, err := app.New(cfg)
