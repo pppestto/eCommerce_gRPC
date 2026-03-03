@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -10,13 +11,24 @@ import (
 	"github.com/pppestto/ecommerce-grpc/services/order-service/internal/domain"
 )
 
-type OrderService struct {
-	eventBus OrderEventBus
-	repo     OrderRepository
+type outboxEvent struct {
+	aggregateType string
+	aggregateID   string
+	eventType     string
+	payload       json.RawMessage
 }
 
-func NewOrderService(repo OrderRepository, eventBus OrderEventBus) *OrderService {
-	return &OrderService{repo: repo, eventBus: eventBus}
+func (e outboxEvent) AggregateType() string    { return e.aggregateType }
+func (e outboxEvent) AggregateID() string      { return e.aggregateID }
+func (e outboxEvent) EventType() string        { return e.eventType }
+func (e outboxEvent) Payload() json.RawMessage { return e.payload }
+
+type OrderService struct {
+	repo OrderRepository
+}
+
+func NewOrderService(repo OrderRepository) *OrderService {
+	return &OrderService{repo: repo}
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, userID string, items []domain.OrderItem) (*domain.Order, error) {
@@ -47,12 +59,20 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID string, items []d
 		return nil, errors.Wrap(err, "failed to create new order")
 	}
 
-	if err := s.repo.Save(ctx, order); err != nil {
-		return nil, errors.Wrap(err, "failed to save order")
+	payload, err := json.Marshal(order)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal order for outbox")
 	}
 
-	if err := s.eventBus.PublishOrderCreated(ctx, order); err != nil {
-		return nil, errors.Wrap(err, "failed to publish order created")
+	event := outboxEvent{
+		aggregateType: "order",
+		aggregateID:   order.ID.String(),
+		eventType:     "order.created",
+		payload:       payload,
+	}
+
+	if err := s.repo.SaveOrderWithOutbox(ctx, order, event); err != nil {
+		return nil, errors.Wrap(err, "failed to save order with outbox")
 	}
 
 	return order, nil
@@ -67,14 +87,23 @@ func (s *OrderService) GetOrder(ctx context.Context, id string) (*domain.Order, 
 }
 
 func (s *OrderService) UpdateOrderStatus(ctx context.Context, orderID string, status domain.OrderStatus) (*domain.Order, error) {
-	order, err := s.repo.UpdateStatus(ctx, orderID, status)
+	order, err := s.repo.GetByID(ctx, orderID)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to update order status")
+		return nil, err
 	}
 
-	if err = s.eventBus.PublishOrderStatusChanged(ctx, order); err != nil {
-		return nil, errors.Wrap(err, "failed to bublish order status changed")
+	order.Status = status
+	payload, err := json.Marshal(order)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal order for outbox")
 	}
 
-	return order, nil
+	event := outboxEvent{
+		aggregateType: "order",
+		aggregateID:   order.ID.String(),
+		eventType:     "order.status_changed",
+		payload:       payload,
+	}
+
+	return s.repo.UpdateStatusWithOutbox(ctx, orderID, status, event)
 }

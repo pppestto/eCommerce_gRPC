@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -10,19 +11,23 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-// OrderEvent — DTO для события заказа из Kafka (ID как string для JSON)
+type ProcessedEventsStore interface {
+	IsProcessed(ctx context.Context, idempotencyKey string) (bool, error)
+	MarkProcessed(ctx context.Context, idempotencyKey string) error
+}
+
 type OrderEvent struct {
-	ID     string         `json:"ID"`
-	UserID string         `json:"UserID"`
-	Items  []OrderItemEv  `json:"Items"`
-	Total  MoneyEv        `json:"Total"`
-	Status int            `json:"Status"`
+	ID     string        `json:"ID"`
+	UserID string        `json:"UserID"`
+	Items  []OrderItemEv `json:"Items"`
+	Total  MoneyEv       `json:"Total"`
+	Status int           `json:"Status"`
 }
 
 type OrderItemEv struct {
-	ProductID string   `json:"ProductID"`
-	Quantity  int      `json:"Quantity"`
-	Price     MoneyEv  `json:"Price"`
+	ProductID string  `json:"ProductID"`
+	Quantity  int     `json:"Quantity"`
+	Price     MoneyEv `json:"Price"`
 }
 
 type MoneyEv struct {
@@ -30,14 +35,14 @@ type MoneyEv struct {
 	Currency string `json:"Currency"`
 }
 
-// OrderEventHandler вызывается для каждого полученного события заказа
 type OrderEventHandler func(ctx context.Context, event OrderEvent, eventType string) error
 
 type OrderKafkaConsumer struct {
-	reader *kafka.Reader
+	reader         *kafka.Reader
+	processedStore ProcessedEventsStore
 }
 
-func NewOrderKafkaConsumer(brokers []string, topic, groupID string) (*OrderKafkaConsumer, error) {
+func NewOrderKafkaConsumer(brokers []string, topic, groupID string, processedStore ProcessedEventsStore) (*OrderKafkaConsumer, error) {
 	if len(brokers) == 0 {
 		return nil, commonerrors.ErrInvalidArgument
 	}
@@ -58,10 +63,12 @@ func NewOrderKafkaConsumer(brokers []string, topic, groupID string) (*OrderKafka
 		StartOffset:    kafka.LastOffset,
 	})
 
-	return &OrderKafkaConsumer{reader: reader}, nil
+	return &OrderKafkaConsumer{
+		reader:         reader,
+		processedStore: processedStore,
+	}, nil
 }
 
-// Consume читает сообщения и вызывает handler для каждого. Блокирует до отмены ctx.
 func (c *OrderKafkaConsumer) Consume(ctx context.Context, handler OrderEventHandler) {
 	defer c.reader.Close()
 
@@ -76,6 +83,19 @@ func (c *OrderKafkaConsumer) Consume(ctx context.Context, handler OrderEventHand
 				return
 			}
 
+			idempotencyKey := fmt.Sprintf("%s:%d:%d", msg.Topic, msg.Partition, msg.Offset)
+
+			if c.processedStore != nil {
+				processed, err := c.processedStore.IsProcessed(ctx, idempotencyKey)
+				if err != nil {
+					log.Printf("order consumer: is processed check: %v", err)
+					continue
+				}
+				if processed {
+					continue
+				}
+			}
+
 			eventType := getHeader(msg.Headers, "event-type")
 			var ev OrderEvent
 			if err := json.Unmarshal(msg.Value, &ev); err != nil {
@@ -86,6 +106,10 @@ func (c *OrderKafkaConsumer) Consume(ctx context.Context, handler OrderEventHand
 			if handler != nil {
 				if err := handler(ctx, ev, eventType); err != nil {
 					log.Printf("order consumer: handler: %v", err)
+				} else if c.processedStore != nil {
+					if err := c.processedStore.MarkProcessed(ctx, idempotencyKey); err != nil {
+						log.Printf("order consumer: mark processed: %v", err)
+					}
 				}
 			}
 		}

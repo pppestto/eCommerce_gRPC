@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -18,8 +20,10 @@ import (
 )
 
 type App struct {
-	grpcServer *grpc.Server
-	listener   net.Listener
+	grpcServer     *grpc.Server
+	listener       net.Listener
+	relayCancel    context.CancelFunc
+	consumerCancel context.CancelFunc
 }
 
 func getEnv(key, defaultVal string) string {
@@ -29,7 +33,6 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-// New создаёт и инициализирует приложение
 func New() (*App, error) {
 	repository, err := postgres.New(context.Background())
 	if err != nil {
@@ -43,35 +46,68 @@ func New() (*App, error) {
 		return nil, fmt.Errorf("failed to create kafka producer: %w", err)
 	}
 
-	orderService := usecase.NewOrderService(repository, producer)
+	orderService := usecase.NewOrderService(repository)
 
-	// Инициализация handler (gRPC)
+	outboxStore := kafka.NewOutboxStore(
+		func(ctx context.Context, limit int) ([]kafka.OutboxRow, error) {
+			rows, err := repository.GetUnpublishedOutbox(ctx, limit)
+			if err != nil {
+				return nil, err
+			}
+			result := make([]kafka.OutboxRow, len(rows))
+			for i, r := range rows {
+				result[i] = kafka.OutboxRow{
+					ID:        r.ID,
+					EventType: r.EventType,
+					Payload:   r.Payload,
+				}
+			}
+			return result, nil
+		},
+		repository.MarkOutboxPublished,
+	)
+
+	relayCtx, relayCancel := context.WithCancel(context.Background())
+	go kafka.OutboxRelay(relayCtx, outboxStore, producer, 50, 2*time.Second)
+
+	consumer, err := kafka.NewOrderKafkaConsumer(brokers, topic, "order-service-consumer", repository)
+	if err != nil {
+		relayCancel()
+		return nil, fmt.Errorf("failed to create kafka consumer: %w", err)
+	}
+	consumerCtx, consumerCancel := context.WithCancel(context.Background())
+	orderEventHandler := func(ctx context.Context, ev kafka.OrderEvent, eventType string) error {
+		payload, _ := json.Marshal(ev)
+		return repository.LogOrderEvent(ctx, ev.ID, eventType, payload)
+	}
+	go consumer.Consume(consumerCtx, orderEventHandler)
+
 	orderHandler := handler.NewOrderHandler(orderService)
 
-	// Создание gRPC сервера
 	grpcServer := grpc.NewServer()
 	pb.RegisterOrderServiceServer(grpcServer, orderHandler)
 	reflection.Register(grpcServer)
 
-	// Слушаем на порту 50051
 	listener, err := net.Listen("tcp", ":50053")
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen: %w", err)
 	}
 
 	return &App{
-		grpcServer: grpcServer,
-		listener:   listener,
+		grpcServer:     grpcServer,
+		listener:       listener,
+		relayCancel:    relayCancel,
+		consumerCancel: consumerCancel,
 	}, nil
 }
 
-// Run запускает gRPC сервер
 func (a *App) Run() error {
 	fmt.Println("Order Service starting on :50053")
 	return a.grpcServer.Serve(a.listener)
 }
 
-// Stop останавливает сервер
 func (a *App) Stop() {
+	a.consumerCancel()
+	a.relayCancel()
 	a.grpcServer.GracefulStop()
 }
