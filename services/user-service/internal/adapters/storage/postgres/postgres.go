@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
-	"fmt"
 	"os"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pkg/errors"
 
+	commonerrors "github.com/pppestto/ecommerce-grpc/services/common/errors"
 	"github.com/pppestto/ecommerce-grpc/services/user-service/internal/domain"
 )
 
@@ -24,11 +26,11 @@ func New(ctx context.Context) (*PostgresRepository, error) {
 
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pool: %w", err)
+		return nil, errors.Wrap(err, "failed to create pool")
 	}
 
 	if err := pool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, errors.Wrap(err, "failed to ping database")
 	}
 
 	return &PostgresRepository{db: pool}, nil
@@ -43,7 +45,7 @@ func (r *PostgresRepository) Save(ctx context.Context, user *domain.User) error 
 
 	_, err := r.db.Exec(ctx, query, user.ID, user.Email, nullableString(user.PasswordHash))
 	if err != nil {
-		return fmt.Errorf("failed to save user: %w", err)
+		return errors.Wrap(err, "failed to save user")
 	}
 
 	return nil
@@ -62,7 +64,10 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*domain.Us
 	var user domain.User
 	err := r.db.QueryRow(ctx, query, id).Scan(&user.ID, &user.Email, &user.PasswordHash)
 	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
+		if err == pgx.ErrNoRows {
+			return nil, errors.Wrap(commonerrors.ErrNotFound, "user not found")
+		}
+		return nil, errors.Wrap(err, "failed to get user by id")
 	}
 
 	return &user, nil
@@ -74,7 +79,10 @@ func (r *PostgresRepository) GetByEmail(ctx context.Context, email string) (*dom
 	var user domain.User
 	err := r.db.QueryRow(ctx, query, email).Scan(&user.ID, &user.Email, &user.PasswordHash)
 	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
+		if err == pgx.ErrNoRows {
+			return nil, errors.Wrap(commonerrors.ErrNotFound, "user not found")
+		}
+		return nil, errors.Wrap(err, "failed to get user by email")
 	}
 
 	return &user, nil
@@ -85,11 +93,11 @@ func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 
 	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
+		return errors.Wrap(err, "failed to delete user")
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("user not found")
+		return errors.Wrap(commonerrors.ErrNotFound, "user not found")
 	}
 
 	return nil

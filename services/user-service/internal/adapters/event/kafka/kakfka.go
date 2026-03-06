@@ -3,12 +3,21 @@ package kafka
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"os"
+	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/segmentio/kafka-go"
 
 	"github.com/pppestto/ecommerce-grpc/services/user-service/internal/domain"
 )
+
+func getEnv(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
+}
 
 type KafkaEventBus struct {
 	writer *kafka.Writer
@@ -16,10 +25,11 @@ type KafkaEventBus struct {
 
 // New создаёт новый Kafka event bus
 func New() (*KafkaEventBus, error) {
-	// TODO: Заменить на реальный адрес Kafka из конфига
+	brokers := strings.Split(getEnv("KAFKA_BROKERS", "localhost:9092"), ",")
+	topic := getEnv("KAFKA_USER_TOPIC", "user-events")
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{"localhost:9092"},
-		Topic:   "user-events",
+		Brokers: brokers,
+		Topic:   topic,
 	})
 
 	return &KafkaEventBus{
@@ -34,7 +44,7 @@ type UserDeletedEvent struct {
 func (k *KafkaEventBus) PublishUserCreated(ctx context.Context, user *domain.User) error {
 	data, err := json.Marshal(user)
 	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
+		return errors.Wrap(err, "failed to marshal event")
 	}
 
 	message := kafka.Message{
@@ -47,7 +57,7 @@ func (k *KafkaEventBus) PublishUserCreated(ctx context.Context, user *domain.Use
 
 	err = k.writer.WriteMessages(ctx, message)
 	if err != nil {
-		return fmt.Errorf("failed to write message: %w", err)
+		return errors.Wrap(err, "failed to write message")
 	}
 
 	return nil
@@ -60,7 +70,7 @@ func (k *KafkaEventBus) PublishUserDeleted(ctx context.Context, userID string) e
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
+		return errors.Wrap(err, "failed to marshal event")
 	}
 
 	message := kafka.Message{
@@ -73,7 +83,7 @@ func (k *KafkaEventBus) PublishUserDeleted(ctx context.Context, userID string) e
 
 	err = k.writer.WriteMessages(ctx, message)
 	if err != nil {
-		return fmt.Errorf("failed to write message: %w", err)
+		return errors.Wrap(err, "failed to write message")
 	}
 
 	return nil

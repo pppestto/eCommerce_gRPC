@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	commonerrors "github.com/pppestto/ecommerce-grpc/services/common/errors"
@@ -40,9 +40,10 @@ type OrderEventHandler func(ctx context.Context, event OrderEvent, eventType str
 type OrderKafkaConsumer struct {
 	reader         *kafka.Reader
 	processedStore ProcessedEventsStore
+	logger         *slog.Logger
 }
 
-func NewOrderKafkaConsumer(brokers []string, topic, groupID string, processedStore ProcessedEventsStore) (*OrderKafkaConsumer, error) {
+func NewOrderKafkaConsumer(brokers []string, topic, groupID string, processedStore ProcessedEventsStore, logger *slog.Logger) (*OrderKafkaConsumer, error) {
 	if len(brokers) == 0 {
 		return nil, commonerrors.ErrInvalidArgument
 	}
@@ -66,6 +67,7 @@ func NewOrderKafkaConsumer(brokers []string, topic, groupID string, processedSto
 	return &OrderKafkaConsumer{
 		reader:         reader,
 		processedStore: processedStore,
+		logger:         logger,
 	}, nil
 }
 
@@ -79,7 +81,7 @@ func (c *OrderKafkaConsumer) Consume(ctx context.Context, handler OrderEventHand
 		default:
 			msg, err := c.reader.ReadMessage(ctx)
 			if err != nil {
-				log.Printf("order consumer: read message: %v", err)
+				c.logger.Error("order consumer: read message failed", "error", err)
 				return
 			}
 
@@ -88,7 +90,7 @@ func (c *OrderKafkaConsumer) Consume(ctx context.Context, handler OrderEventHand
 			if c.processedStore != nil {
 				processed, err := c.processedStore.IsProcessed(ctx, idempotencyKey)
 				if err != nil {
-					log.Printf("order consumer: is processed check: %v", err)
+					c.logger.Error("order consumer: is processed check failed", "error", err, "idempotency_key", idempotencyKey)
 					continue
 				}
 				if processed {
@@ -99,16 +101,16 @@ func (c *OrderKafkaConsumer) Consume(ctx context.Context, handler OrderEventHand
 			eventType := getHeader(msg.Headers, "event-type")
 			var ev OrderEvent
 			if err := json.Unmarshal(msg.Value, &ev); err != nil {
-				log.Printf("order consumer: unmarshal: %v", err)
+				c.logger.Error("order consumer: unmarshal failed", "error", err)
 				continue
 			}
 
 			if handler != nil {
 				if err := handler(ctx, ev, eventType); err != nil {
-					log.Printf("order consumer: handler: %v", err)
+					c.logger.Error("order consumer: handler failed", "error", err, "event_id", ev.ID)
 				} else if c.processedStore != nil {
 					if err := c.processedStore.MarkProcessed(ctx, idempotencyKey); err != nil {
-						log.Printf("order consumer: mark processed: %v", err)
+						c.logger.Error("order consumer: mark processed failed", "error", err, "idempotency_key", idempotencyKey)
 					}
 				}
 			}

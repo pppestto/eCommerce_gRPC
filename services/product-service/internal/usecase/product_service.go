@@ -12,8 +12,11 @@ type ProductService struct {
 	repo     ProductRepository
 }
 
-func NewProductService(repo ProductRepository) *ProductService {
-	return &ProductService{repo: repo}
+func NewProductService(repo ProductRepository, eventBus ProductEventBus) *ProductService {
+	return &ProductService{
+		repo:     repo,
+		eventBus: eventBus,
+	}
 }
 
 func (s *ProductService) GetProduct(ctx context.Context, id string) (*domain.Product, error) {

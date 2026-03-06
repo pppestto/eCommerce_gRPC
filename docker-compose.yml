@@ -32,6 +32,7 @@ services:
     image: confluentinc/cp-kafka:7.5.0
     container_name: ecommerce_kafka
     environment:
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       # KRaft mode (без Zookeeper — устраняет NodeExists)
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -54,6 +55,20 @@ services:
       timeout: 5s
       retries: 5
 
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: ecommerce_kafka_init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic user-events --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic product-events --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic order-events --partitions 1 --replication-factor 1
+        echo "Topics created"
+
   user-service:
     build:
       context: .
@@ -61,11 +76,18 @@ services:
     container_name: ecommerce_user_service
     environment:
       DATABASE_URL: postgres://postgres:password@postgres:5432/ecommerce?sslmode=disable
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_USER_TOPIC: user-events
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
     ports:
       - "50051:50051"
     depends_on:
       postgres:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   product-service:
     build:
@@ -74,11 +96,18 @@ services:
     container_name: ecommerce_product_service
     environment:
       DATABASE_URL: postgres://postgres:password@postgres:5432/ecommerce?sslmode=disable
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_PRODUCT_TOPIC: product-events
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
     ports:
       - "50052:50052"
     depends_on:
       postgres:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   order-service:
     build:
@@ -89,6 +118,7 @@ services:
       DATABASE_URL: postgres://postgres:password@postgres:5432/ecommerce?sslmode=disable
       KAFKA_BROKERS: kafka:9092
       KAFKA_ORDER_TOPIC: order-events
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
     ports:
       - "50053:50053"
     depends_on:
@@ -96,6 +126,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   bff:
     build:
@@ -108,6 +140,7 @@ services:
       ORDER_SERVICE_ADDR: order-service:50053
       JWT_SECRET: your-256-bit-secret-key-change-in-production
       REDIS_ADDR: redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
     ports:
       - "8080:8080"
     depends_on:
@@ -115,6 +148,33 @@ services:
       - product-service
       - order-service
       - redis
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: ecommerce_jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: ecommerce_prometheus
+    volumes:
+      - ./deployments/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - bff
+      - user-service
+      - product-service
+      - order-service
 
 volumes:
   postgres_data:

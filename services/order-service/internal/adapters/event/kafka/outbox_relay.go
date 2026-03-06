@@ -2,7 +2,7 @@ package kafka
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -30,7 +30,7 @@ func (k *OrderKafkaProducer) PublishMessage(ctx context.Context, key []byte, eve
 	return k.writer.WriteMessages(ctx, msg)
 }
 
-func OutboxRelay(ctx context.Context, store OutboxStore, producer *OrderKafkaProducer, batchSize int, interval time.Duration) {
+func OutboxRelay(ctx context.Context, store OutboxStore, producer *OrderKafkaProducer, batchSize int, interval time.Duration, logger *slog.Logger) {
 	if batchSize <= 0 {
 		batchSize = 50
 	}
@@ -46,14 +46,14 @@ func OutboxRelay(ctx context.Context, store OutboxStore, producer *OrderKafkaPro
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := relayBatch(ctx, store, producer, batchSize); err != nil {
-				log.Printf("outbox relay: %v", err)
+			if err := relayBatch(ctx, store, producer, batchSize, logger); err != nil {
+				logger.Error("outbox relay: batch failed", "error", err)
 			}
 		}
 	}
 }
 
-func relayBatch(ctx context.Context, store OutboxStore, producer *OrderKafkaProducer, limit int) error {
+func relayBatch(ctx context.Context, store OutboxStore, producer *OrderKafkaProducer, limit int, logger *slog.Logger) error {
 	rows, err := store.GetUnpublishedOutbox(ctx, limit)
 	if err != nil {
 		return err
@@ -61,12 +61,12 @@ func relayBatch(ctx context.Context, store OutboxStore, producer *OrderKafkaProd
 
 	for _, row := range rows {
 		if err := producer.PublishMessage(ctx, []byte(row.ID), row.EventType, row.Payload); err != nil {
-			log.Printf("outbox relay: failed to publish %s: %v", row.ID, err)
+			logger.Error("outbox relay: failed to publish", "error", err, "outbox_id", row.ID)
 			continue
 		}
 
 		if err := store.MarkOutboxPublished(ctx, row.ID); err != nil {
-			log.Printf("outbox relay: failed to mark published %s: %v", row.ID, err)
+			logger.Error("outbox relay: failed to mark published", "error", err, "outbox_id", row.ID)
 		}
 	}
 

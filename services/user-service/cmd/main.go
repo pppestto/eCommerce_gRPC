@@ -1,18 +1,23 @@
 package main
 
 import (
-	"log"
+	"os"
 
+	"github.com/pppestto/ecommerce-grpc/services/common/logger"
 	"github.com/pppestto/ecommerce-grpc/services/user-service/internal/app"
 )
 
 func main() {
+	logger.Init("user-service", os.Getenv("ENV") == "production")
+
 	application, err := app.New()
 	if err != nil {
-		log.Fatalf("failed to create app: %v", err)
+		logger.L().Error("failed to create app", "error", err)
+		os.Exit(1)
 	}
 
 	if err := application.Run(); err != nil {
-		log.Fatalf("failed to run app: %v", err)
+		logger.L().Error("failed to run app", "error", err)
+		os.Exit(1)
 	}
 }

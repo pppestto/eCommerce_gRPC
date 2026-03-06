@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -10,9 +9,12 @@ import (
 	"time"
 
 	"github.com/pppestto/ecommerce-grpc/services/bff/internal/app"
+	"github.com/pppestto/ecommerce-grpc/services/common/logger"
 )
 
 func main() {
+	logger.Init("bff", os.Getenv("ENV") == "production")
+
 	cfg := app.Config{
 		Port:        8080,
 		UserAddr:    getEnv("USER_SERVICE_ADDR", "127.0.0.1:50051"),
@@ -23,12 +25,14 @@ func main() {
 
 	application, err := app.New(cfg)
 	if err != nil {
-		log.Fatalf("failed to create app: %v", err)
+		logger.L().Error("failed to create app", "error", err)
+		os.Exit(1)
 	}
 
 	go func() {
 		if err := application.Run(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			logger.L().Error("server error", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -36,13 +40,13 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("shutting down...")
+	logger.L().Info("shutting down")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := application.Stop(ctx); err != nil {
-		log.Printf("shutdown error: %v", err)
+		logger.L().Error("shutdown error", "error", err)
 	}
-	log.Println("bff stopped")
+	logger.L().Info("bff stopped")
 }
 
 func getEnv(key, defaultVal string) string {

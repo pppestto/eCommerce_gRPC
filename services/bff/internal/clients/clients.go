@@ -2,13 +2,14 @@ package clients
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	orderv1 "github.com/pppestto/ecommerce-grpc/pb/order/v1"
+	"github.com/pkg/errors"
 	productv1 "github.com/pppestto/ecommerce-grpc/pb/product/v1"
 	userv1 "github.com/pppestto/ecommerce-grpc/pb/user/v1"
 	"github.com/pppestto/ecommerce-grpc/services/bff/internal/cache"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -23,24 +24,27 @@ type Clients struct {
 }
 
 func New(ctx context.Context, userAddr, productAddr, orderAddr, redisAddr string) (*Clients, error) {
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	}
 
 	userConn, err := grpc.NewClient(userAddr, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("connect to user-service: %w", err)
+		return nil, errors.Wrap(err, "connect to user-service")
 	}
 
 	productConn, err := grpc.NewClient(productAddr, opts...)
 	if err != nil {
 		userConn.Close()
-		return nil, fmt.Errorf("connect to product-service: %w", err)
+		return nil, errors.Wrap(err, "connect to product-service")
 	}
 
 	orderConn, err := grpc.NewClient(orderAddr, opts...)
 	if err != nil {
 		userConn.Close()
 		productConn.Close()
-		return nil, fmt.Errorf("connect to order-service: %w", err)
+		return nil, errors.Wrap(err, "connect to order-service")
 	}
 
 	userRaw := userv1.NewUserServiceClient(userConn)
