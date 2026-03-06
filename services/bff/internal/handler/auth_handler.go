@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	userv1 "github.com/pppestto/ecommerce-grpc/pb/user/v1"
@@ -13,12 +14,14 @@ import (
 type AuthHandler struct {
 	user       userv1.UserServiceClient
 	jwtManager *auth.JWTManager
+	logger     *slog.Logger
 }
 
-func NewAuthHandler(user userv1.UserServiceClient, jwtManager *auth.JWTManager) *AuthHandler {
+func NewAuthHandler(user userv1.UserServiceClient, jwtManager *auth.JWTManager, logger *slog.Logger) *AuthHandler {
 	return &AuthHandler{
 		user:       user,
 		jwtManager: jwtManager,
+		logger:     logger,
 	}
 }
 
@@ -71,12 +74,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusUnauthorized, "invalid email or password")
 			return
 		}
+		h.logger.Error("login failed", "error", err, "email", req.Email)
 		writeJSONError(w, http.StatusInternalServerError, "login failed")
 		return
 	}
 
 	token, err := h.jwtManager.Generate(resp.User.Id, resp.User.Email)
 	if err != nil {
+		h.logger.Error("failed to generate token", "error", err, "user_id", resp.User.Id)
 		writeJSONError(w, http.StatusInternalServerError, "failed to generate token")
 		return
 	}
@@ -116,6 +121,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusBadRequest, status.Convert(err).Message())
 			return
 		}
+		h.logger.Error("registration failed", "error", err, "email", req.Email)
 		writeJSONError(w, http.StatusInternalServerError, "registration failed")
 		return
 	}

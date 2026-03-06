@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	commonpb "github.com/pppestto/ecommerce-grpc/pb/common"
@@ -26,6 +27,22 @@ type CreateOrderItem struct {
 type MoneyJSON struct {
 	Amount   int64  `json:"amount"`
 	Currency string `json:"currency"`
+}
+
+type OrderHandler struct {
+	user    userv1.UserServiceClient
+	product productv1.ProductServiceClient
+	order   orderv1.OrderServiceClient
+	logger  *slog.Logger
+}
+
+func NewOrderHandler(user userv1.UserServiceClient, product productv1.ProductServiceClient, order orderv1.OrderServiceClient, logger *slog.Logger) *OrderHandler {
+	return &OrderHandler{
+		user:    user,
+		product: product,
+		order:   order,
+		logger:  logger,
+	}
 }
 
 func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +76,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusBadRequest, "user not found")
 			return
 		}
+		h.logger.Error("failed to validate user", "error", err, "user_id", userID)
 		writeJSONError(w, http.StatusInternalServerError, "failed to validate user")
 		return
 	}
@@ -74,6 +92,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 				writeJSONError(w, http.StatusBadRequest, "product not found: "+item.ProductID)
 				return
 			}
+			h.logger.Error("failed to validate product", "error", err, "product_id", item.ProductID)
 			writeJSONError(w, http.StatusInternalServerError, "failed to validate product")
 			return
 		}
@@ -99,6 +118,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusBadRequest, status.Convert(err).Message())
 			return
 		}
+		h.logger.Error("failed to create order", "error", err, "user_id", userID)
 		writeJSONError(w, http.StatusInternalServerError, "failed to create order")
 		return
 	}
