@@ -1,317 +1,285 @@
 ﻿{
-  "info": {
-    "name": "E-Commerce gRPC Microservices API (BFF)",
-    "description": "Full Postman collection for the BFF REST API. Includes happy paths, negative cases, auth, products, orders, metrics and fallback logic.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
-    { "key": "authToken", "value": "", "type": "string" },
-    { "key": "registeredEmail", "value": "", "type": "string" },
-    { "key": "userPassword", "value": "secret123", "type": "string" },
-    { "key": "productId", "value": "", "type": "string" }
-  ],
-  "item": [
-    {
-      "name": "Smoke Flow",
-      "item": [
-        {
-          "name": "Health Check",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/health" },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Body says ok', function () { var jsonData = pm.response.json(); pm.expect(jsonData.status).to.eql('ok'); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Register User",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/register"
-          },
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "var existing = pm.variables.get('registeredEmail') || pm.collectionVariables.get('registeredEmail');",
-                  "if (!existing) {",
-                  "  var generated = 'postman-' + pm.variables.replaceIn('{{$guid}}').toLowerCase() + '@example.com';",
-                  "  pm.variables.set('registeredEmail', generated);",
-                  "  pm.collectionVariables.set('registeredEmail', generated);",
-                  "}"
-                ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
-                  "pm.test('User returned', function () { var jsonData = pm.response.json(); var email = pm.variables.get('registeredEmail') || pm.collectionVariables.get('registeredEmail'); pm.expect(jsonData.user.email).to.eql(email); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login User",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/login"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Token returned', function () { var jsonData = pm.response.json(); pm.expect(jsonData.token).to.be.a('string').and.not.empty; pm.variables.set('authToken', jsonData.token); pm.collectionVariables.set('authToken', jsonData.token); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "List Products",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/products?page=1&size=5" },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Response is 200 and body is valid JSON', function () { var jsonData = pm.response.json(); pm.response.to.have.status(200); pm.expect(jsonData).to.be.an('object'); pm.collectionVariables.set('productId', ''); if (jsonData.products && Array.isArray(jsonData.products) && jsonData.products.length > 0) { pm.collectionVariables.set('productId', jsonData.products[0].id); } });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Get Product by ID",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/{{productId}}" },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is acceptable for product lookup', function () { var productId = pm.collectionVariables.get('productId'); if (!productId) { pm.expect(pm.response.code).to.be.oneOf([400, 404]); } else { pm.expect(pm.response.code).to.be.oneOf([200, 400, 404]); } });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Create Order with Auth",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"items\": [\n    {\n      \"product_id\": \"{{productId}}\",\n      \"quantity\": 2,\n      \"price\": {\n        \"amount\": 1000,\n        \"currency\": \"USD\"\n      }\n    }\n  ]\n}"
-            },
-            "url": "{{baseUrl}}/api/orders"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Response is acceptable for order creation', function () { pm.expect([201, 400, 401]).to.include(pm.response.code); });"
-                ]
-              }
-            }
-          ]
-        }
-      ]
+    "info": {
+        "name": "E-Commerce gRPC Microservices API (BFF)",
+        "description": "Full Postman collection for the BFF REST API. Includes happy paths, negative cases, auth, products, orders, metrics and fallback logic.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
-    {
-      "name": "Authentication",
-      "item": [
-        {
-          "name": "Duplicate Registration",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/register"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
+    "variable": [
+        { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+        { "key": "authToken", "value": "", "type": "string" },
+        { "key": "registeredEmail", "value": "", "type": "string" },
+        { "key": "userPassword", "value": "secret123", "type": "string" },
+        { "key": "productId", "value": "", "type": "string" }
+    ],
+    "item": [{
+            "name": "Smoke Flow",
+            "item": [{
+                    "name": "Health Check",
+                    "request": { "method": "GET", "url": "{{baseUrl}}/api/health" },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                                "pm.test('Body says ok', function () { var jsonData = pm.response.json(); pm.expect(jsonData.status).to.eql('ok'); });"
+                            ]
+                        }
+                    }]
+                },
+                {
+                    "name": "Register User",
+                    "request": {
+                        "method": "POST",
+                        "header": [{ "key": "Content-Type", "value": "application/json" }],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+                        },
+                        "url": "{{baseUrl}}/api/auth/register"
+                    },
+                    "event": [{
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "var existing = pm.variables.get('registeredEmail') || pm.collectionVariables.get('registeredEmail');",
+                                    "if (!existing) {",
+                                    "  var generated = 'postman-' + pm.variables.replaceIn('{{$guid}}').toLowerCase() + '@example.com';",
+                                    "  pm.variables.set('registeredEmail', generated);",
+                                    "  pm.collectionVariables.set('registeredEmail', generated);",
+                                    "}"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                                    "pm.test('User returned', function () { var jsonData = pm.response.json(); var email = pm.variables.get('registeredEmail') || pm.collectionVariables.get('registeredEmail'); pm.expect(jsonData.user.email).to.eql(email); });"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login User",
+                    "request": {
+                        "method": "POST",
+                        "header": [{ "key": "Content-Type", "value": "application/json" }],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+                        },
+                        "url": "{{baseUrl}}/api/auth/login"
+                    },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                                "pm.test('Token returned', function () { var jsonData = pm.response.json(); pm.expect(jsonData.token).to.be.a('string').and.not.empty; pm.variables.set('authToken', jsonData.token); pm.collectionVariables.set('authToken', jsonData.token); });"
+                            ]
+                        }
+                    }]
+                },
+                {
+                    "name": "List Products",
+                    "request": { "method": "GET", "url": "{{baseUrl}}/api/products?page=1&size=5" },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                                "pm.test('Response is 200 and body is valid JSON', function () { var jsonData = pm.response.json(); pm.response.to.have.status(200); pm.expect(jsonData).to.be.an('object'); pm.collectionVariables.set('productId', ''); if (jsonData.products && Array.isArray(jsonData.products) && jsonData.products.length > 0) { pm.collectionVariables.set('productId', jsonData.products[0].id); } });"
+                            ]
+                        }
+                    }]
+                },
+                {
+                    "name": "Get Product by ID",
+                    "request": { "method": "GET", "url": "{{baseUrl}}/api/products/{{productId}}" },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is acceptable for product lookup', function () { var productId = pm.collectionVariables.get('productId'); if (!productId) { pm.expect(pm.response.code).to.be.oneOf([400, 404]); } else { pm.expect(pm.response.code).to.be.oneOf([200, 400, 404]); } });"
+                            ]
+                        }
+                    }]
+                },
+                {
+                    "name": "Create Order with Auth",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Authorization", "value": "Bearer {{authToken}}" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"items\": [\n    {\n      \"product_id\": \"{{productId}}\",\n      \"quantity\": 2,\n      \"price\": {\n        \"amount\": 1000,\n        \"currency\": \"USD\"\n      }\n    }\n  ]\n}"
+                        },
+                        "url": "{{baseUrl}}/api/orders"
+                    },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Response is acceptable for order creation', function () { pm.expect([201, 400, 401]).to.include(pm.response.code); });"
+                            ]
+                        }
+                    }]
+                }
+            ]
         },
         {
-          "name": "Invalid Login",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"wrong-password\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/login"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Products",
-      "item": [
-        {
-          "name": "Missing Product",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000" },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
+            "name": "Authentication",
+            "item": [{
+                    "name": "Duplicate Registration",
+                    "request": {
+                        "method": "POST",
+                        "header": [{ "key": "Content-Type", "value": "application/json" }],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+                        },
+                        "url": "{{baseUrl}}/api/auth/register"
+                    },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
+                            ]
+                        }
+                    }]
+                },
+                {
+                    "name": "Invalid Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [{ "key": "Content-Type", "value": "application/json" }],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"wrong-password\"\n}"
+                        },
+                        "url": "{{baseUrl}}/api/auth/login"
+                    },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 401', function () { pm.response.to.have.status(401); });"
+                            ]
+                        }
+                    }]
+                }
+            ]
         },
         {
-          "name": "List Products with Category Filter",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/products?page=1&size=10&category=electronics" },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Orders",
-      "item": [
-        {
-          "name": "Order Without Auth",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"items\": []\n}"
-            },
-            "url": "{{baseUrl}}/api/orders"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });"
-                ]
-              }
-            }
-          ]
+            "name": "Products",
+            "item": [{
+                    "name": "Missing Product",
+                    "request": { "method": "GET", "url": "{{baseUrl}}/api/products/00000000-0000-0000-0000-000000000000" },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
+                            ]
+                        }
+                    }]
+                },
+                {
+                    "name": "List Products with Category Filter",
+                    "request": { "method": "GET", "url": "{{baseUrl}}/api/products?page=1&size=10&category=electronics" },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                            ]
+                        }
+                    }]
+                }
+            ]
         },
         {
-          "name": "Order with Empty Items",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"items\": []\n}"
-            },
-            "url": "{{baseUrl}}/api/orders"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 400 or 401', function () { pm.expect([400, 401]).to.include(pm.response.code); });"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Observability",
-      "item": [
+            "name": "Orders",
+            "item": [{
+                    "name": "Order Without Auth",
+                    "request": {
+                        "method": "POST",
+                        "header": [{ "key": "Content-Type", "value": "application/json" }],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"items\": []\n}"
+                        },
+                        "url": "{{baseUrl}}/api/orders"
+                    },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 401', function () { pm.response.to.have.status(401); });"
+                            ]
+                        }
+                    }]
+                },
+                {
+                    "name": "Order with Empty Items",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Authorization", "value": "Bearer {{authToken}}" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"items\": []\n}"
+                        },
+                        "url": "{{baseUrl}}/api/orders"
+                    },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "pm.test('Status is 400 or 401', function () { pm.expect([400, 401]).to.include(pm.response.code); });"
+                            ]
+                        }
+                    }]
+                }
+            ]
+        },
         {
-          "name": "Metrics",
-          "request": { "method": "GET", "url": "{{baseUrl}}/metrics" },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Metrics body contains Prometheus format', function () { pm.expect(pm.response.text()).to.include('http_requests_total'); });"
-                ]
-              }
-            }
-          ]
+            "name": "Observability",
+            "item": [{
+                "name": "Metrics",
+                "request": { "method": "GET", "url": "{{baseUrl}}/metrics" },
+                "event": [{
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                            "pm.test('Metrics body contains Prometheus format', function () { pm.expect(pm.response.text()).to.include('http_requests_total'); });"
+                        ]
+                    }
+                }]
+            }]
         }
-      ]
-    }
-  ]
+    ]
 }
