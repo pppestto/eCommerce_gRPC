@@ -1,0 +1,24 @@
+// proto/payment/v1/payment.proto
+syntax = "proto3";
+
+package payment.v1;
+
+option go_package = "github.com/pppestto/ecommerce-grpc/pb/payment/v1";
+
+import "common/common.proto";
+
+message PayRequest {
+  string        order_id = 1;
+  common.Money  amount   = 2;
+  string        idempotency_key = 3; // опционально, для повтора запросов
+}
+
+message PayResponse {
+  bool   success = 1;
+  string transaction_id = 2;
+  string error_message = 3;
+}
+
+service PaymentService {
+  rpc Pay(PayRequest) returns (PayResponse);
+}
