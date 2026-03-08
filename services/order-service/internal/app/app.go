@@ -16,6 +16,7 @@ import (
 	"github.com/pppestto/ecommerce-grpc/pkg/otel"
 	"github.com/pppestto/ecommerce-grpc/services/common/logger"
 	"github.com/pppestto/ecommerce-grpc/services/order-service/internal/adapters/event/kafka"
+	"github.com/pppestto/ecommerce-grpc/services/order-service/internal/adapters/payment"
 	"github.com/pppestto/ecommerce-grpc/services/order-service/internal/adapters/storage/postgres"
 	"github.com/pppestto/ecommerce-grpc/services/order-service/internal/handler"
 	"github.com/pppestto/ecommerce-grpc/services/order-service/internal/usecase"
@@ -28,6 +29,7 @@ type App struct {
 	relayCancel    context.CancelFunc
 	consumerCancel context.CancelFunc
 	otelShutdown   func(context.Context) error
+	paymentClient  *payment.GrpcClient
 }
 
 func getEnv(key, defaultVal string) string {
@@ -55,7 +57,18 @@ func New() (*App, error) {
 		return nil, errors.Wrap(err, "failed to create kafka producer")
 	}
 
-	orderService := usecase.NewOrderService(repository)
+	var paymentClient usecase.PaymentClient
+	var paymentGrpc *payment.GrpcClient
+	if paymentAddr := getEnv("PAYMENT_SERVICE_ADDR", ""); paymentAddr != "" {
+		pc, err := payment.NewGrpcClient(context.Background(), paymentAddr)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create payment client")
+		}
+		paymentGrpc = pc
+		paymentClient = pc
+	}
+
+	orderService := usecase.NewOrderService(repository, paymentClient)
 
 	outboxStore := kafka.NewOutboxStore(
 		func(ctx context.Context, limit int) ([]kafka.OutboxRow, error) {
@@ -108,6 +121,7 @@ func New() (*App, error) {
 		relayCancel:    relayCancel,
 		consumerCancel: consumerCancel,
 		otelShutdown:   otelShutdown,
+		paymentClient:  paymentGrpc,
 	}, nil
 }
 
@@ -118,6 +132,9 @@ func (a *App) Run() error {
 
 func (a *App) Stop() {
 	_ = a.otelShutdown(context.Background())
+	if a.paymentClient != nil {
+		_ = a.paymentClient.Close()
+	}
 	a.consumerCancel()
 	a.relayCancel()
 	a.grpcServer.GracefulStop()

@@ -21,3 +21,8 @@ type OrderRepository interface {
 	UpdateStatus(ctx context.Context, id string, status domain.OrderStatus) (*domain.Order, error)
 	UpdateStatusWithOutbox(ctx context.Context, id string, status domain.OrderStatus, event OutboxEventSpec) (*domain.Order, error)
 }
+
+// PaymentClient вызывается после создания заказа для списания оплаты (mock или реальный платёжный шлюз).
+type PaymentClient interface {
+	Pay(ctx context.Context, orderID string, amount int64, currency string) (success bool, err error)
+}

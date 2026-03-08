@@ -24,11 +24,12 @@ func (e outboxEvent) EventType() string        { return e.eventType }
 func (e outboxEvent) Payload() json.RawMessage { return e.payload }
 
 type OrderService struct {
-	repo OrderRepository
+	repo    OrderRepository
+	payment PaymentClient // optional: если nil, заказ остаётся PENDING
 }
 
-func NewOrderService(repo OrderRepository) *OrderService {
-	return &OrderService{repo: repo}
+func NewOrderService(repo OrderRepository, payment PaymentClient) *OrderService {
+	return &OrderService{repo: repo, payment: payment}
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, userID string, items []domain.OrderItem) (*domain.Order, error) {
@@ -73,6 +74,29 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID string, items []d
 
 	if err := s.repo.SaveOrderWithOutbox(ctx, order, event); err != nil {
 		return nil, errors.Wrap(err, "failed to save order with outbox")
+	}
+
+	// Оплата: если payment-service доступен и оплата успешна — переводим заказ в PAID
+	if s.payment != nil {
+		ok, payErr := s.payment.Pay(ctx, order.ID.String(), order.Total.Amount, order.Total.Currency)
+		if payErr != nil {
+			return order, nil // заказ создан, но оплата не прошла — остаётся PENDING
+		}
+		if ok {
+			order.Status = domain.OrderStatusPaid
+			payloadPaid, _ := json.Marshal(order)
+			paidEvent := outboxEvent{
+				aggregateType: "order",
+				aggregateID:   order.ID.String(),
+				eventType:     "order.status_changed",
+				payload:       payloadPaid,
+			}
+			updated, err := s.repo.UpdateStatusWithOutbox(ctx, order.ID.String(), domain.OrderStatusPaid, paidEvent)
+			if err != nil {
+				return order, nil
+			}
+			return updated, nil
+		}
 	}
 
 	return order, nil
