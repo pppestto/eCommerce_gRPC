@@ -119,6 +119,7 @@ services:
       KAFKA_BROKERS: kafka:9092
       KAFKA_ORDER_TOPIC: order-events
       OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      PAYMENT_SERVICE_ADDR: payment-service:50054
     ports:
       - "50053:50053"
     depends_on:
@@ -128,6 +129,19 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+      payment-service:
+        condition: service_started
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    container_name: ecommerce_payment_service
+    environment:
+      PAYMENT_GRPC_PORT: "50054"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+    ports:
+      - "50054:50054"
 
   bff:
     build:
